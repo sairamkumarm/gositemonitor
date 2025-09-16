@@ -1,0 +1,133 @@
+# GoSiteMonitor
+
+## Overview
+
+**GoSiteMonitor** is a concurrent site monitoring tool written in Go. It leverages a worker pool, rate limiting, and periodic job scheduling to scrape URLs efficiently while respecting throughput constraints. The system is designed for observability, structured logging, and easy configuration, forming the foundation for a scalable monitoring or crawler system.
+
+---
+
+## Features
+
+* **Concurrent scraping**: Configurable worker pool to process multiple URLs in parallel.
+* **Rate limiting**: Global token-based throttle to control requests per second.
+* **Periodic job scheduling**: Refill job queue at configurable intervals for repeated monitoring.
+* **Structured logging**: JSON logs for easy aggregation and analysis.
+* **Config-driven**: JSON configuration file to define URLs, worker count, rate limits, log level, request timeout, and output file.
+* **Extensible results aggregation**: Centralized fan-in results channel, ready for future async logging or message broker integration.
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+* Go 1.20+
+* Git
+
+### Installation
+
+```bash
+git clone https://github.com/yourusername/gositemonitor.git
+cd gositemonitor
+go mod tidy
+```
+
+### Configuration
+
+Create a `config.json` file in the root directory:
+
+```json
+{
+  "urls": ["https://golang.org", "https://example.com"],
+  "worker_count": 5,
+  "rate_limit_per_sec": 2,
+  "request_timeout_secs": 3,
+  "log_level": "info",
+  "output_file": "results.json"
+}
+```
+
+**Parameters:**
+
+* `urls`: List of URLs to scrape.
+* `worker_count`: Number of concurrent workers (minimum 5).
+* `rate_limit_per_sec`: Maximum number of requests per second across all workers.
+* `request_timeout_secs`: Timeout for each HTTP request.
+* `log_level`: Logging verbosity (`debug`, `info`, `warn`, `error`).
+* `output_file`: File path to save scrape results.
+
+---
+
+### Running the Monitor
+
+```bash
+go run ./cmd/gositemonitor -config config.json
+```
+
+The monitor will:
+
+1. Load the configuration.
+2. Spawn the worker pool.
+3. Refill jobs periodically according to the configured interval.
+4. Log each scrape result in structured JSON format.
+5. Run continuously until interrupted.
+
+---
+
+## Architecture
+```
+┌──────────────┐
+│ Job Refiller │ ──> jobs channel ───┐
+└──────────────┘                     │
+                                     ▼
+                            ┌─────────────────┐
+                            │    WorkerPool   │
+                            │   (concurrent)  │
+                            └─────────────────┘
+	                                   │
+	                                   ▼
+                              results channel
+	                                   │
+	                                   ▼
+                            ┌─────────────────┐
+                            │    Aggregator   │
+                            │   logs & stats  │
+                            └─────────────────┘
+
+
+```
+* **Job refiller**: periodically pushes jobs into `jobs` channel.
+* **Worker pool**: N workers consume jobs, acquire permits, and process requests.
+* **Permits channel**: global rate limiter controlling request throughput.
+* **Results channel**: fan-in of scrape results, consumed by aggregator for logging and future persistence.
+
+---
+
+## Code Structure
+
+```
+gositemonitor/
+│── cmd/
+│   └── gositemonitor/
+│       └── main.go       # Entry point
+│
+├── pkg/
+│   ├── config/           # JSON config loader and validation
+│   ├── scrapper/         # Worker pool, scrape logic
+│   └── logger/           # Zap logging setup
+│
+├── config.json            # Example configuration
+└── results.json           # Output file for results
+```
+
+---
+
+## Future Improvements
+
+* Replace dummy scrape with real HTTP requests and HTML parsing.
+* Add `context.WithTimeout` per request to avoid stuck workers.
+* Implement async logging with message brokers (Kafka, NATS) for high throughput.
+* Add metrics collection (latency, errors, throughput).
+* Support multi-tenant monitoring with dynamic job scheduling.
+
+---
