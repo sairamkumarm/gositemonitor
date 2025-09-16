@@ -1,0 +1,8 @@
+{
+  "urls": ["https://golang.org", "https://example.com"],
+  "worker_count": 5,
+  "rate_limit_per_sec": 2,
+  "request_timeout_secs": 3,
+  "log_level": "info",
+  "output_file": "results.json"
+}
