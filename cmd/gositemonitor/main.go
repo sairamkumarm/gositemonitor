@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sairamkumarm/gositemonitor/pkg/aggregator"
 	"github.com/sairamkumarm/gositemonitor/pkg/config"
 	"github.com/sairamkumarm/gositemonitor/pkg/logger"
 	"github.com/sairamkumarm/gositemonitor/pkg/scrapper"
@@ -123,17 +124,7 @@ func main() {
 	}
 
 	//read results channel and log outputs
-	go func() {
-		for res := range results {
-			log.Info("scrape done",
-				zap.String("url", res.URL),
-				zap.Int("status", res.Status),
-				zap.Int64("latency_ms", res.ResponseMS),
-				zap.String("err", res.Error),
-				zap.Int("Worker", res.WorkerID),
-			)
-		}
-	}()
+	go aggregator.Aggregate(results,log,finish,cancel)
 
 		
 		<-finish.Done()
