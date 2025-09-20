@@ -42,8 +42,9 @@ Create a `config.json` file in the root directory:
   "worker_count": 5,
   "rate_limit_per_sec": 2,
   "request_timeout_secs": 3,
+  "request_interval":5,
   "log_level": "info",
-  "output_file": "results.json"
+  "output_dir": "results"
 }
 ```
 
@@ -53,15 +54,16 @@ Create a `config.json` file in the root directory:
 * `worker_count`: Number of concurrent workers (minimum 5).
 * `rate_limit_per_sec`: Maximum number of requests per second across all workers.
 * `request_timeout_secs`: Timeout for each HTTP request.
+* `request_interval` : Interval between ping job refills.
 * `log_level`: Logging verbosity (`debug`, `info`, `warn`, `error`).
-* `output_file`: File path to save scrape results.
+* `output_dir`: Directory where session based logs are stored.
 
 ---
 
 ### Running the Monitor
 
 ```bash
-go run ./cmd/gositemonitor -config config.json
+go run ./cmd/gositemonitor -config config.json -runtime 30
 ```
 
 The monitor will:
@@ -70,7 +72,7 @@ The monitor will:
 2. Spawn the worker pool.
 3. Refill jobs periodically according to the configured interval.
 4. Log each scrape result in structured JSON format.
-5. Run continuously until interrupted.
+5. Run continuously for 30 seconds or until interrupted.
 
 ---
 
@@ -113,21 +115,11 @@ gositemonitor/
 │
 ├── pkg/
 │   ├── config/           # JSON config loader and validation
+│   ├── helper/           # Logic dump to clean main.go
 │   ├── scrapper/         # Worker pool, scrape logic
 │   └── logger/           # Zap logging setup
 │
-├── config.json            # Example configuration
-└── results.json           # Output file for results
+├── config.json           # Example configuration
 ```
-
----
-
-## Future Improvements
-
-* Replace dummy scrape with real HTTP requests and HTML parsing.
-* Add `context.WithTimeout` per request to avoid stuck workers.
-* Implement async logging with message brokers (Kafka, NATS) for high throughput.
-* Add metrics collection (latency, errors, throughput).
-* Support multi-tenant monitoring with dynamic job scheduling.
 
 ---
