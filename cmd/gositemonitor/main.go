@@ -78,9 +78,8 @@ func main() {
 	//create permit channel that releases the ratelimit amount of tokens every second, so the workers can pick them up and work
 	go scheduler.PermitHandler(permits,config.RateLimitPerSec,finish)
 
-	//job refiller
+	//job refiller to fill jobs channel periodically with urls to ping
 	go scheduler.JobHandler(jobs,config.URLs,config.RateLimitPerSec,config.RequestIntervalDuration(),finish)
-
 
 	timeout := time.Duration(config.RequestTimeOutSecs) * time.Second
 	//resuse a shared httpclient in all the workers, common transport settings are configured here
