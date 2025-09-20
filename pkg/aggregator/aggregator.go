@@ -5,15 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"time"
 
 	"github.com/sairamkumarm/gositemonitor/pkg/scrapper"
 	"go.uber.org/zap"
 )
 
-func Aggregate(results chan scrapper.ScrapeResult, log *zap.Logger, finish context.Context, cancel context.CancelFunc) {
+func Aggregate(results chan scrapper.ScrapeResult, outputDir string, log *zap.Logger, finish context.Context, cancel context.CancelFunc) {
 	filename := fmt.Sprintf("gsm-%s.json", time.Now().Format("20060102_150405"))
-	file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	file, err := os.OpenFile(path.Join(outputDir,filename), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		log.Error("Result file Error")
 		cancel()

@@ -14,6 +14,7 @@ import (
 	"github.com/sairamkumarm/gositemonitor/pkg/aggregator"
 	"github.com/sairamkumarm/gositemonitor/pkg/config"
 	"github.com/sairamkumarm/gositemonitor/pkg/logger"
+	"github.com/sairamkumarm/gositemonitor/pkg/scheduler"
 	"github.com/sairamkumarm/gositemonitor/pkg/scrapper"
 	"go.uber.org/zap"
 )
@@ -22,7 +23,6 @@ func main() {
 	configPath := flag.String("config", "config.json", "Load a configuration for the site monitor")
 	runtimeTimout := flag.Int("runtime", -100, "Monitor runtime in seconds")
 	flag.Parse()
-	
 
 	// config, err := config.Load()
 	config, err := config.Load(*configPath)
@@ -36,15 +36,13 @@ func main() {
 
 	log.Info("Starting GoSiteMonitor",
 		zap.Int("urls_count", len(config.URLs)),
-		zap.String("output_file", config.OutputFile),
+		zap.String("output_dir", config.OutputDir),
 		zap.Int("worker_count", config.WorkerCount),
 		zap.Int("rate_limit_per_sec", config.RateLimitPerSec),
 		zap.Int("request_timeout", config.RequestTimeOutSecs))
 
 	b, _ := json.MarshalIndent(config, "", " ")
 	log.Info("loaded config", zap.String("config", string(b)))
-	fmt.Println("Ready to commence operations.")
-
 
 	var finish context.Context
 	var cancel context.CancelFunc
@@ -56,55 +54,33 @@ func main() {
 	}
 	defer cancel()
 
-	sigCh := make(chan os.Signal,1)
-	signal.Notify(sigCh,syscall.SIGINT,syscall.SIGTERM)
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
+	err = os.MkdirAll(config.OutputDir, 0755)
+	if err != nil {
+		log.Error("Error making output dir: "+err.Error())
+	} else {
+		log.Info("Ping results stored in "+config.OutputDir)
+	}
 	go func() {
 		<-sigCh
 		fmt.Println("Interrupt acknowledged")
 		cancel()
 	}()
 
-
+	fmt.Println("Ready to commence operations.")
+	
 	jobs := make(chan string, len(config.URLs))
 	results := make(chan scrapper.ScrapeResult)
+	permits := make(chan struct{}, config.RateLimitPerSec)
 
 	//create permit channel that releases the ratelimit amount of tokens every second, so the workers can pick them up and work
-	permits := make(chan struct{}, config.RateLimitPerSec)
-	go func() {
-		ticker := time.NewTicker(time.Second / time.Duration(config.RateLimitPerSec))
-		defer ticker.Stop()
-	mainloop:
-		for {
-			<-ticker.C
-			select {
-			case <-finish.Done():
-				break mainloop
-			case permits <- struct{}{}:
-			}
-		}
-	}()
+	go scheduler.PermitHandler(permits,config.RateLimitPerSec,finish)
 
 	//job refiller
-	go func() {
-		ticker := time.NewTicker(config.RequestIntervalDuration())
-		defer ticker.Stop()
-	mainloop:
-		for {
-			for _, url := range config.URLs {
-				for i := 0; i < config.RateLimitPerSec; i++ {
-					select {
-					case <-finish.Done():
-						break mainloop
-					case jobs <- url:
-						//enqueue
-					}
-				}
-			}
-			<-ticker.C
+	go scheduler.JobHandler(jobs,config.URLs,config.RateLimitPerSec,config.RequestIntervalDuration(),finish)
 
-		}
-	}()
 
 	timeout := time.Duration(config.RequestTimeOutSecs) * time.Second
 	//resuse a shared httpclient in all the workers, common transport settings are configured here
@@ -124,9 +100,8 @@ func main() {
 	}
 
 	//read results channel and log outputs
-	go aggregator.Aggregate(results,log,finish,cancel)
+	go aggregator.Aggregate(results, config.OutputDir ,log, finish, cancel)
 
-		
-		<-finish.Done()
-		fmt.Println("Shutting down")
-	}
+	<-finish.Done()
+	fmt.Println("Shutting down")
+}

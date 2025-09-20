@@ -15,7 +15,7 @@ type Config struct {
 	RateLimitPerSec    int      `json:"rate_limit_per_sec"`
 	RequestTimeOutSecs int      `json:"request_timeout_secs"`
 	LogLevel           string   `json:"log_level"`
-	OutputFile         string   `json:"output_file"`
+	OutputDir         string   `json:"output_dir"`
 	RequestInterval    int      `json:"request_interval"`
 }
 
@@ -112,9 +112,9 @@ func Load(path string) (*Config, error) {
 		cfg.RequestInterval = newInterval
 	}
 
-	if strings.TrimSpace(cfg.OutputFile) == "" {
-		cfg.OutputFile = "result.json"
-		fmt.Println("Output file not specified, defaulting to result.json")
+	if strings.TrimSpace(cfg.OutputDir) == "" {
+		cfg.OutputDir = "gsm_logs"
+		fmt.Println("Output Directory not specified, defaulting to gsm_logs")
 	}
 
 	switch strings.ToLower(cfg.LogLevel) {
