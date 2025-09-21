@@ -2,7 +2,9 @@ package scrapper
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"sync"
 	"time"
 	// "github.com/sairamkumarm/gositemonitor/pkg/logger"
 )
@@ -12,7 +14,7 @@ type ScrapeResult struct {
 	Status       int    `json:"status"`
 	ResponseMS   int64  `json:"response_time_ms"`
 	Error        string `json:"error,omitempty"`
-	TimestampUTC string `json:"timestamp_utc"`
+	TimestampUTC time.Time `json:"timestamp_utc"`
 	WorkerID     int    `json:"worker_id"`
 }
 
@@ -25,11 +27,11 @@ func timedGet(url string, timeout time.Duration, client *http.Client) ScrapeResu
 			URL:          url,
 			Status:       -1,
 			Error:        err.Error(),
-			TimestampUTC: time.Now().UTC().Format(time.RFC3339),
+			TimestampUTC: time.Now().UTC(),
 		}
 	}
 	start := time.Now()
-	res := ScrapeResult{URL: url, TimestampUTC: start.UTC().Format(time.RFC3339)}
+	res := ScrapeResult{URL: url, TimestampUTC: start.UTC()}
 	resp, err := client.Do(req)
 	res.ResponseMS = time.Since(start).Milliseconds()
 	if err != nil {
@@ -43,10 +45,12 @@ func timedGet(url string, timeout time.Duration, client *http.Client) ScrapeResu
 	return res
 }
 
-func Worker(id int, jobs chan string, results chan ScrapeResult, permits chan struct{}, timeoutsecs time.Duration, client *http.Client, finish context.Context) {
+func Worker(id int, jobs chan string, results chan ScrapeResult, permits chan struct{}, timeoutsecs time.Duration, client *http.Client, finish context.Context, wg *sync.WaitGroup) {
+	defer wg.Done()
 	for {
 		select {
 		case <-finish.Done():
+			fmt.Println("Deactivating Worker-",id)
 			return
 		case url, ok := <-jobs:
 			if !ok {

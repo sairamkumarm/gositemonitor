@@ -15,7 +15,7 @@ type Config struct {
 	RateLimitPerSec    int      `json:"rate_limit_per_sec"`
 	RequestTimeOutSecs int      `json:"request_timeout_secs"`
 	LogLevel           string   `json:"log_level"`
-	OutputDir         string   `json:"output_dir"`
+	OutputDir          string   `json:"output_dir"`
 	RequestInterval    int      `json:"request_interval"`
 }
 
@@ -33,7 +33,6 @@ func Load(path string) (*Config, error) {
 		maxRatePerSec   = 10
 	)
 
-
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("cannot read config: %w", err)
@@ -43,34 +42,40 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("malformed config: %w", err)
 	}
 
-
 	if len(cfg.URLs) == 0 {
 		return nil, fmt.Errorf("no URLs provided in config")
 	}
 
-	cleanedURLs := make([]string, 0,len(cfg.URLs))
+	urlmap := make(map[string]struct{}) //handling duplicate urls
+	cleanedURLs := make([]string, 0, len(cfg.URLs))
 
 	for i, u := range cfg.URLs {
 		u = strings.TrimSpace(u)
 		if u == "" {
-			fmt.Printf("Skipping empty URL at index %d\n",i)
+			fmt.Printf("Skipping empty URL at index %d\n", i)
 			continue
 		}
 		parsed, err := url.Parse(u)
-		if err != nil || parsed.Scheme=="" || parsed.Host == ""{
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 			return nil, fmt.Errorf("invalid URL at index %d: %q", i, u)
 		}
-		if parsed.Scheme!="http" && parsed.Scheme!="https" {
-			return nil, fmt.Errorf("unsupported URL scheme at index %d: %q",i,u)
+		if parsed.Scheme != "http" && parsed.Scheme != "https" {
+			return nil, fmt.Errorf("unsupported URL scheme at index %d: %q", i, u)
 		}
-		cleanedURLs = append(cleanedURLs, parsed.String())
+		_, duplicate := urlmap[parsed.String()] //duplicate handling
+		if duplicate {
+			fmt.Printf("Skipping duplicate URL %s\n", parsed.String())
+		} else {
+			urlmap[parsed.String()] = struct{}{}
+			cleanedURLs = append(cleanedURLs, parsed.String())
+		}
 	}
-	if len(cleanedURLs)==0 {
+	if len(cleanedURLs) == 0 {
 		return nil, fmt.Errorf("no Valid URLs to monitor")
 	}
 	cfg.URLs = cleanedURLs
 
-		// Worker count
+	// Worker count
 	if cfg.WorkerCount < minWorkers {
 		fmt.Printf("WorkerCount too low (%d), defaulting to %d\n", cfg.WorkerCount, defaultWorkers)
 		cfg.WorkerCount = defaultWorkers
