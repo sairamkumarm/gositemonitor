@@ -91,43 +91,44 @@ The monitor will:
                             │    WorkerPool   │
                             │   (concurrent)  │
                             └────────┬────────┘
-	                                   │
+                                     │
                                      ▼
                               results channel
-	                                   │
-	                                   ▼
+                                     │
+                                     ▼
                             ┌─────────────────┐            
                             │    Aggregator   │       ┌─────────────────────┐    
                             │   logs, stats,  │——————▶│  Write to log file  │
                             │   and patterns  │       └─────────────────────┘
                             └────────┬────────┘
-	                                   │
+                                     │
                                      ▼
                            ┌────────────────────┐
-                           │      Analyser      │       ┌─────────────────────┐
-                           │  (outages reports  │——————▶│ Write to event file │
-                           │and latency metrics)│       └─────────────────────┘
-                           └──────────┬─────────┘
-	                                    │
-                                      ▼
+                           │      Analyser      │       
+                           │  (outages reports  │
+                           │and latency metrics)│       
+                           └─────────┬──────────┘
+                                     │
+                                     ▼
                             notification channel
-	                                    │
-	                                    ▼
-                             ┌─────────────────┐
-                             │   Notification  │
-                             │      handler    │
-                             └────────┬────────┘
-                                      │
-	                                    ▼
+                                     │
+                                     ▼
+                            ┌─────────────────┐
+                            │   Notification  │
+                            │      handler    │
+                            └────────┬────────┘        ┌─────────────────────┐
+                                     ├——————————————──▶│ Write to event file │
+                                     │                 └─────────────────────┘
+                                     ▼
                    Send Notifications via specified channels
 ```
 * **Job refiller**: periodically pushes jobs into `jobs` channel.
 * **Worker pool**: N workers consume jobs, acquire permits, and process requests.
-* **Permits channel**: global rate limiter controlling request throughput.
-* **Results channel**: fan-in of scrape results, consumed by aggregator for logging and future persistence.
-* **Aggregator**: Listens to results channel, pulls results from N workers into one lane.
-* **Analyser**: Finds patterns in results channel and reports of such.
-* **Notification Handler**: Sends enriched notifications to specified channel.
+* **`Permits` channel**: global rate limiter controlling request throughput.
+* **`Results` channel**: fan-in of scrape results, consumed by aggregator for logging and future persistence.
+* **Aggregator**: Listens to `results` channel, pulls results from N workers into one lane.
+* **Analyser**: Finds patterns in results channel and reports to the `notification` channel.
+* **Notification Handler**: Sends enriched notifications through mail.
 
 ---
 
@@ -148,7 +149,7 @@ gositemonitor/
 │   ├── notification/     # sends notifications
 │   └── logger/           # Zap logging setup
 │
-├── config.json           # Example configuration
+└── config.json           # Example configuration
 ```
 
 ---
