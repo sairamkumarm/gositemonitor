@@ -14,7 +14,7 @@
 * **Structured logging**: JSON logs for easy aggregation and analysis.
 * **Config-driven**: JSON configuration file to define URLs, worker count, rate limits, log level, request timeout, and output file.
 * **Extensible results aggregation**: Centralized fan-in results channel, ready for future async logging or message broker integration.
-
+* **Outage detection and latecy logs**: Detects patterns in ping results and logs them seperately.
 ---
 
 ## Getting Started
@@ -78,30 +78,56 @@ The monitor will:
 
 ## Architecture
 ```
+┌────────────┐
+│   Config   │
+└──────┬─────┘
+       │
+       ▼
 ┌──────────────┐
-│ Job Refiller │ ──> jobs channel ───┐
+│ Job Refiller │ ──▶ jobs channel ───┐
 └──────────────┘                     │
                                      ▼
                             ┌─────────────────┐
                             │    WorkerPool   │
                             │   (concurrent)  │
-                            └─────────────────┘
+                            └────────┬────────┘
 	                                   │
-	                                   ▼
+                                     ▼
                               results channel
 	                                   │
 	                                   ▼
-                            ┌─────────────────┐
-                            │    Aggregator   │
-                            │   logs & stats  │
-                            └─────────────────┘
-
-
+                            ┌─────────────────┐            
+                            │    Aggregator   │       ┌─────────────────────┐    
+                            │   logs, stats,  │——————▶│  Write to log file  │
+                            │   and patterns  │       └─────────────────────┘
+                            └────────┬────────┘
+	                                   │
+                                     ▼
+                           ┌────────────────────┐
+                           │      Analyser      │       ┌─────────────────────┐
+                           │  (outages reports  │——————▶│ Write to event file │
+                           │and latency metrics)│       └─────────────────────┘
+                           └──────────┬─────────┘
+	                                    │
+                                      ▼
+                            notification channel
+	                                    │
+	                                    ▼
+                             ┌─────────────────┐
+                             │   Notification  │
+                             │      handler    │
+                             └────────┬────────┘
+                                      │
+	                                    ▼
+                   Send Notifications via specified channels
 ```
 * **Job refiller**: periodically pushes jobs into `jobs` channel.
 * **Worker pool**: N workers consume jobs, acquire permits, and process requests.
 * **Permits channel**: global rate limiter controlling request throughput.
 * **Results channel**: fan-in of scrape results, consumed by aggregator for logging and future persistence.
+* **Aggregator**: Listens to results channel, pulls results from N workers into one lane.
+* **Analyser**: Finds patterns in results channel and reports of such.
+* **Notification Handler**: Sends enriched notifications to specified channel.
 
 ---
 
@@ -115,8 +141,11 @@ gositemonitor/
 │
 ├── pkg/
 │   ├── config/           # JSON config loader and validation
-│   ├── helper/           # Logic dump to clean main.go
+│   ├── scheduler/        # Logic dump of routines from main.go
 │   ├── scrapper/         # Worker pool, scrape logic
+│   ├── aggregator/       # Aggregation logic
+│   ├── analyser/         # finds patterns
+│   ├── notification/     # sends notifications
 │   └── logger/           # Zap logging setup
 │
 ├── config.json           # Example configuration
