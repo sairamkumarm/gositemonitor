@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
-	"sync"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -16,8 +16,8 @@ import (
 	"github.com/sairamkumarm/gositemonitor/pkg/config"
 	"github.com/sairamkumarm/gositemonitor/pkg/logger"
 	"github.com/sairamkumarm/gositemonitor/pkg/notification"
+	"github.com/sairamkumarm/gositemonitor/pkg/pinger"
 	"github.com/sairamkumarm/gositemonitor/pkg/scheduler"
-	"github.com/sairamkumarm/gositemonitor/pkg/scrapper"
 	"go.uber.org/zap"
 )
 
@@ -38,7 +38,7 @@ func main() {
 	defer logger.Log.Sync()
 
 	logger.Log.Info("Starting GoSiteMonitor",
-		zap.Any("config",config.ProdConfig))
+		zap.Any("config", config.ProdConfig))
 
 	// b, _ := json.MarshalIndent(config.ProdConfig, "", " ")
 	// logger.Log.Info("loaded config", zap.String("config", string(b)))
@@ -81,15 +81,15 @@ func main() {
 	fmt.Println("Ready to commence operations.")
 
 	jobs := make(chan string, len(config.ProdConfig.URLs))
-	results := make(chan scrapper.ScrapeResult,100)
+	results := make(chan pinger.PingResult, 100)
 	permits := make(chan struct{}, config.ProdConfig.RateLimitPerSec)
 
 	//create permit channel that releases the ratelimit amount of tokens every second, so the workers can pick them up and work
-	wg.Add(1)//wait for permit handler
+	wg.Add(1) //wait for permit handler
 	go scheduler.PermitHandler(permits, config.ProdConfig.RateLimitPerSec, finish, &wg)
 
 	//job refiller to fill jobs channel periodically with urls to ping
-	wg.Add(1)//wait for job refiller
+	wg.Add(1) //wait for job refiller
 	go scheduler.JobHandler(jobs, config.ProdConfig.URLs, config.ProdConfig.RateLimitPerSec, config.ProdConfig.GetRequestIntervalDuration(), finish, &wg)
 
 	timeout := time.Duration(config.ProdConfig.RequestTimeOutSecs) * time.Second
@@ -106,19 +106,18 @@ func main() {
 	}
 	//spawn workers, they wait internally for jobs and permits from their channels
 	for i := 0; i < config.ProdConfig.WorkerCount; i++ {
-		wg.Add(1)//wait for worker
-		go scrapper.Worker(i, jobs, results, permits, timeout, client, finish, &wg)
+		wg.Add(1) //wait for worker
+		go pinger.Worker(i, jobs, results, permits, timeout, client, finish, &wg)
 
 	}
 
 	//read results channel and log outputs
-	wg.Add(1)//wait for aggregator
+	wg.Add(1) //wait for aggregator
 	go aggregator.Aggregate(results, config.ProdConfig.OutputDir, finish, cancel, &wg)
 
 	//initiate the event handler
-	wg.Add(1)//wait for event handler
-	go notification.EventHandler(config.ProdConfig.OutputDir,config.ProdConfig.NotificationServices, finish, cancel, &wg)
-
+	wg.Add(1) //wait for event handler
+	go notification.EventHandler(config.ProdConfig.OutputDir, config.ProdConfig.NotificationServices, finish, cancel, &wg)
 
 	<-finish.Done()
 	wg.Wait()

@@ -1,4 +1,4 @@
-package scrapper
+package pinger
 
 import (
 	"context"
@@ -9,21 +9,21 @@ import (
 	// "github.com/sairamkumarm/gositemonitor/pkg/logger"
 )
 
-type ScrapeResult struct {
-	URL          string `json:"url"`
-	Status       int    `json:"status"`
-	ResponseMS   int64  `json:"response_time_ms"`
-	Error        string `json:"error,omitempty"`
+type PingResult struct {
+	URL          string    `json:"url"`
+	Status       int       `json:"status"`
+	ResponseMS   int64     `json:"response_time_ms"`
+	Error        string    `json:"error,omitempty"`
 	TimestampUTC time.Time `json:"timestamp_utc"`
-	WorkerID     int    `json:"worker_id"`
+	WorkerID     int       `json:"worker_id"`
 }
 
-func timedGet(url string, timeout time.Duration, client *http.Client) ScrapeResult {
+func timedGet(url string, timeout time.Duration, client *http.Client) PingResult {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return ScrapeResult{
+		return PingResult{
 			URL:          url,
 			Status:       -1,
 			Error:        err.Error(),
@@ -31,7 +31,7 @@ func timedGet(url string, timeout time.Duration, client *http.Client) ScrapeResu
 		}
 	}
 	start := time.Now()
-	res := ScrapeResult{URL: url, TimestampUTC: start.UTC()}
+	res := PingResult{URL: url, TimestampUTC: start.UTC()}
 	resp, err := client.Do(req)
 	res.ResponseMS = time.Since(start).Milliseconds()
 	if err != nil {
@@ -45,12 +45,12 @@ func timedGet(url string, timeout time.Duration, client *http.Client) ScrapeResu
 	return res
 }
 
-func Worker(id int, jobs chan string, results chan ScrapeResult, permits chan struct{}, timeoutsecs time.Duration, client *http.Client, finish context.Context, wg *sync.WaitGroup) {
+func Worker(id int, jobs chan string, results chan PingResult, permits chan struct{}, timeoutsecs time.Duration, client *http.Client, finish context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for {
 		select {
 		case <-finish.Done():
-			fmt.Println("Deactivating Worker-",id)
+			fmt.Println("Deactivating Worker-", id)
 			return
 		case url, ok := <-jobs:
 			if !ok {
@@ -66,10 +66,10 @@ func Worker(id int, jobs chan string, results chan ScrapeResult, permits chan st
 			}
 			res := timedGet(url, timeoutsecs, client)
 			res.WorkerID = id
-			select{
+			select {
 			case <-finish.Done():
 				return
-			case results <-  res:
+			case results <- res:
 				//nothing just enqueue
 			}
 		}

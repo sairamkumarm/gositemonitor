@@ -56,7 +56,7 @@ Create a `config.json` file in the root directory:
 
 **Parameters:**
 
-* `urls`: List of URLs to scrape.
+* `urls`: List of URLs to ping.
 * `worker_count`: Number of concurrent workers (minimum 5).
 * `rate_limit_per_sec`: Maximum number of requests per second across all workers.
 * `request_timeout_secs`: Timeout for each HTTP request.
@@ -79,7 +79,7 @@ The monitor will:
 1. Load the configuration.
 2. Spawn the worker pool.
 3. Refill jobs periodically according to the configured interval.
-4. Log each scrape result in structured JSON format.
+4. Log each ping result in structured JSON format.
 5. Run continuously for 30 seconds or until interrupted.
 
 ---
@@ -137,7 +137,7 @@ The monitor will:
 * **Job refiller**: periodically pushes jobs into `jobs` channel.
 * **Worker pool**: N workers consume jobs, acquire permits, and process requests.
 * **`Permits` channel**: global rate limiter controlling request throughput.
-* **`Results` channel**: fan-in of scrape results, consumed by aggregator for logging and future persistence.
+* **`Results` channel**: fan-in of ping results, consumed by aggregator for logging and future persistence.
 * **Aggregator**: Listens to `results` channel, pulls results from N workers into one lane.
 * **Analyser**: Finds patterns in results channel and reports to the `notification` channel.
 * **Notification Handler**: Sends enriched notifications through `mail` and/or `discord` as configured.
@@ -155,7 +155,7 @@ gositemonitor/
 ├── pkg/
 │   ├── config/           # JSON config loader and validation
 │   ├── scheduler/        # Logic dump of routines from main.go
-│   ├── scrapper/         # Worker pool, scrape logic
+│   ├── pinger/           # Worker pool, ping logic
 │   ├── aggregator/       # Aggregation logic
 │   ├── analyser/         # finds patterns
 │   ├── notification/     # sends notifications

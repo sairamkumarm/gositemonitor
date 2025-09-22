@@ -6,7 +6,7 @@ import (
 
 	"github.com/sairamkumarm/gositemonitor/pkg/logger"
 	"github.com/sairamkumarm/gositemonitor/pkg/notification"
-	"github.com/sairamkumarm/gositemonitor/pkg/scrapper"
+	"github.com/sairamkumarm/gositemonitor/pkg/pinger"
 	"go.uber.org/zap"
 )
 
@@ -27,15 +27,15 @@ func FillInitialUrls(urls []string) {
 	}
 }
 
-func AnalyseResult(res scrapper.ScrapeResult, finish context.Context) {
+func AnalyseResult(res pinger.PingResult, finish context.Context) {
 	_, ok := Stats[res.URL]
 	if ok {
 		stat := Stats[res.URL]
 		if res.Status == -1 || res.Status >= 400 {
 			if stat.OutageStart.IsZero() { //first error, possible start of outage
-				stat.OutageStart= res.TimestampUTC
+				stat.OutageStart = res.TimestampUTC
 			}
-			stat.OutageLatest= res.TimestampUTC //latest time of outage
+			stat.OutageLatest = res.TimestampUTC //latest time of outage
 			stat.ConsecutiveFails++
 			stat.TotalFails++
 			if stat.ConsecutiveFails == 3 {
@@ -43,7 +43,7 @@ func AnalyseResult(res scrapper.ScrapeResult, finish context.Context) {
 				//log and write to notification channel about ongoing outage
 				statcopy := *stat
 				notif := notification.Event{Message: "Possible outage in progress", Data: statcopy, TimestampUTC: time.Now()}
-				select{
+				select {
 				case <-finish.Done():
 					return
 				case notification.EventChannel <- notif:
@@ -53,12 +53,12 @@ func AnalyseResult(res scrapper.ScrapeResult, finish context.Context) {
 		} else {
 			//non error, two possibilies, outage recovered, normal success
 			if !stat.OutageStart.IsZero() { //this is the conclusion of a previous outage
-				stat.OutageLatest= res.TimestampUTC
+				stat.OutageLatest = res.TimestampUTC
 				//log and write to a notification channel about outage
 				logger.Log.Warn("Outage report", zap.Any("outage", stat))
 				statcopy := *stat
-				notif:= notification.Event{Message: "Outage Report",Data: statcopy, TimestampUTC: time.Now()}
-				select{
+				notif := notification.Event{Message: "Outage Report", Data: statcopy, TimestampUTC: time.Now()}
+				select {
 				case <-finish.Done():
 					return
 				case notification.EventChannel <- notif:
