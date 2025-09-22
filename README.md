@@ -98,7 +98,7 @@ The monitor will:
                                      ▼
                             ┌─────────────────┐            
                             │    Aggregator   │       ┌─────────────────────┐    
-                            │   logs, stats,  │——————▶│  Write to log file  │
+                            │   logs, stats,  │──────▶│  Write to log file  │
                             │   and patterns  │       └─────────────────────┘
                             └────────┬────────┘
                                      │
@@ -117,7 +117,7 @@ The monitor will:
                             │   Notification  │
                             │      handler    │
                             └────────┬────────┘        ┌─────────────────────┐
-                                     ├——————————————──▶│ Write to event file │
+                                     ├────────────────▶│ Write to event file │
                                      │                 └─────────────────────┘
                                      ▼
                    Send Notifications via specified channels
