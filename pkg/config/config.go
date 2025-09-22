@@ -3,24 +3,34 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"net/mail"
 	"net/url"
 	"os"
+
+	// "slices"
 	"strings"
 	"time"
+
 )
 
 type Config struct {
-	URLs               []string `json:"urls"`
-	WorkerCount        int      `json:"worker_count"`
-	RateLimitPerSec    int      `json:"rate_limit_per_sec"`
-	RequestTimeOutSecs int      `json:"request_timeout_secs"`
-	LogLevel           string   `json:"log_level"`
-	OutputDir          string   `json:"output_dir"`
-	RequestInterval    int      `json:"request_interval"`
+	URLs                  []string `json:"urls"`
+	WorkerCount           int      `json:"worker_count"`
+	RateLimitPerSec       int      `json:"rate_limit_per_sec"`
+	RequestTimeOutSecs    int      `json:"request_timeout_secs"`
+	LogLevel              string   `json:"log_level"`
+	OutputDir             string   `json:"output_dir"`
+	RequestInterval       int      `json:"request_interval"`
+	NotificationServices  []string `json:"notification_services"`
+	DiscordWebhookAddress string   `json:"discord_webhook_address"`
+	MailerSendAPIToken    string   `json:"mailersend_api_token"`
+	MailerSendEmailId     string   `json:"mailersend_email_id"`
+	NotificationMailId    string   `json:"mail_id"`
 }
+
 var ProdConfig Config = Config{}
 
-func Load(path string) (error) {
+func Load(path string) error {
 	const (
 		minWorkers      = 1
 		defaultWorkers  = 5
@@ -32,7 +42,7 @@ func Load(path string) (error) {
 		minRatePerSec   = 1
 		maxRatePerSec   = 10
 	)
-	
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("cannot read config: %w", err)
@@ -126,6 +136,56 @@ func Load(path string) (error) {
 	default:
 		ProdConfig.LogLevel = "info"
 		fmt.Println("Unrecognized log level, defaulting to info")
+	}
+
+	serviceNames := map[string]struct{}{"discord":{},"email":{}}
+	cleanedSenders := make([]string, 0, len(serviceNames))
+	//load notification integrations
+
+	if len(ProdConfig.NotificationServices) == 0 {
+		fmt.Println("No notification services picked")
+	} else {
+		for _, name := range ProdConfig.NotificationServices {
+			name = strings.TrimSpace(name)
+			if name == "" {
+				fmt.Printf("Ignoring empty notification service")
+			} else {
+				if _, ok := serviceNames[name]; ok {
+					cleanedSenders = append(cleanedSenders, name)
+				} else {
+					fmt.Println("Ignoring invalid notification service:", name)
+				}
+			}
+		}
+		ProdConfig.NotificationServices = cleanedSenders
+	}
+
+	//verify additional fields in config from mail and discord
+	ProdConfig.MailerSendAPIToken = strings.TrimSpace(ProdConfig.MailerSendAPIToken)
+	ProdConfig.MailerSendEmailId = strings.TrimSpace(ProdConfig.MailerSendEmailId)
+	ProdConfig.NotificationMailId = strings.TrimSpace(ProdConfig.NotificationMailId)
+	ProdConfig.DiscordWebhookAddress = strings.TrimSpace(ProdConfig.DiscordWebhookAddress)
+
+	for _, service := range cleanedSenders {
+		switch service {
+		case "email":
+			if ProdConfig.MailerSendAPIToken == "" ||
+				ProdConfig.MailerSendEmailId == "" ||
+				ProdConfig.NotificationMailId == "" {
+				return fmt.Errorf("empty field in main config")
+			}
+			_, err = mail.ParseAddressList(
+				fmt.Sprintf("GoSiteMonitor <%s>, Reciever <%s>",
+					ProdConfig.MailerSendEmailId,
+					ProdConfig.NotificationMailId))
+			if err != nil {
+				return fmt.Errorf("mail format error")
+			}
+		case "discord":
+			if ProdConfig.DiscordWebhookAddress == "" {
+				return fmt.Errorf("discord webhook token empty")
+			}
+		}
 	}
 
 	return nil

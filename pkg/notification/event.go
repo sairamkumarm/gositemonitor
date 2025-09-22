@@ -15,15 +15,15 @@ import (
 
 type Notifiable any
 
-type Notification struct {
+type Event struct {
 	Message string
 	Data Notifiable
 	TimestampUTC time.Time
 }
 
-var EventChannel = make(chan Notification, 100)
+var EventChannel = make(chan Event, 100)
 
-func EventHandler(outputDir string, finish context.Context, cancel context.CancelFunc, wg *sync.WaitGroup){
+func EventHandler(outputDir string,notificationServices []string, finish context.Context,  cancel context.CancelFunc, wg *sync.WaitGroup){
 	defer wg.Done()
 	filename := fmt.Sprintf("gsm-%s-events.json", time.Now().Format("20060102_150405"))
 	file, err := os.OpenFile(path.Join(outputDir,filename), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
@@ -38,7 +38,8 @@ func EventHandler(outputDir string, finish context.Context, cancel context.Cance
 			fmt.Println("Deactivating Notification Handler")
 			return;
 		case notif:= <- EventChannel:
-			logger.Log.Info("Notification",zap.Any("value",notif))//do something with the notification
+			//do something with the notification
+			sendNotifications(notif,notificationServices)
 			bytes, err := json.Marshal(notif)
 			if err != nil {
 				logger.Log.Error("notification unparsable", zap.Error(err))

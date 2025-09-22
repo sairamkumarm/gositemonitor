@@ -1,0 +1,17 @@
+{
+  "urls": [
+    "example.com",
+    "abcd.com"
+  ],
+  "worker_count": 5,
+  "rate_limit_per_sec": 2,
+  "request_timeout_secs": 3,
+  "request_interval": 10,
+  "log_level": "info",
+  "output_dir": "gsm_logs",
+  "notification_services":["discord","email"],
+  "discord_webhook_address":"https://discord.com/api/webhooks/xxxxxxxxxx/yyyyyyyyyyyyyyyy",
+  "mailersend_api_token":"mlsn.xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "mailersend_email_id":"alert@xxxxxxxx.mlsender.net",
+  "mail_id":"user@gmail.com"
+}

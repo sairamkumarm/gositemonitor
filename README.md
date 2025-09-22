@@ -2,19 +2,20 @@
 
 ## Overview
 
-**GoSiteMonitor** is a concurrent site monitoring tool written in Go. It leverages a worker pool, rate limiting, and periodic job scheduling to scrape URLs efficiently while respecting throughput constraints. The system is designed for observability, structured logging, and easy configuration, forming the foundation for a scalable monitoring or crawler system.
+**GoSiteMonitor** is a concurrent site monitoring tool written in Go. It leverages a worker pool, rate limiting, and periodic job scheduling to ping URLs efficiently while respecting throughput constraints. The system is designed for observability, structured logging, and easy configuration, forming the foundation for a scalable monitoring system.
 
 ---
 
 ## Features
 
-* **Concurrent scraping**: Configurable worker pool to process multiple URLs in parallel.
+* **Concurrent pinging**: Configurable worker pool to process multiple URLs in parallel.
 * **Rate limiting**: Global token-based throttle to control requests per second.
 * **Periodic job scheduling**: Refill job queue at configurable intervals for repeated monitoring.
 * **Structured logging**: JSON logs for easy aggregation and analysis.
 * **Config-driven**: JSON configuration file to define URLs, worker count, rate limits, log level, request timeout, and output file.
 * **Extensible results aggregation**: Centralized fan-in results channel, ready for future async logging or message broker integration.
 * **Outage detection and latecy logs**: Detects patterns in ping results and logs them seperately.
+* **Multi-Channel Notifications**: Sends outage alerts and reports via email and discord.
 ---
 
 ## Getting Started
@@ -44,7 +45,12 @@ Create a `config.json` file in the root directory:
   "request_timeout_secs": 3,
   "request_interval":5,
   "log_level": "info",
-  "output_dir": "results"
+  "output_dir": "results",
+  "notification_services":["discord","email"],
+  "discord_webhook_address":"https://discord.com/api/webhooks/xxxxxxxxxx/yyyyyyyyyyyyyyyy",
+  "mailersend_api_token":"mlsn.xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "mailersend_email_id":"alert@xxxxxxxx.mlsender.net",
+  "mail_id":"user@gmail.com"
 }
 ```
 
@@ -57,6 +63,8 @@ Create a `config.json` file in the root directory:
 * `request_interval` : Interval between ping job refills.
 * `log_level`: Logging verbosity (`debug`, `info`, `warn`, `error`).
 * `output_dir`: Directory where session based logs are stored.
+* `notification_services`: Pick between discord, email or both.
+* `api-tokens and keys`: Necessary to use the notification service.
 
 ---
 
@@ -78,49 +86,53 @@ The monitor will:
 
 ## Architecture
 ```
-┌────────────┐
-│   Config   │
-└──────┬─────┘
-       │
-       ▼
-┌──────────────┐
-│ Job Refiller │ ──▶ jobs channel ───┐
-└──────────────┘                     │
-                                     ▼
-                            ┌─────────────────┐
-                            │    WorkerPool   │
-                            │   (concurrent)  │
-                            └────────┬────────┘
-                                     │
-                                     ▼
-                              results channel
-                                     │
-                                     ▼
-                            ┌─────────────────┐            
-                            │    Aggregator   │       ┌─────────────────────┐    
-                            │   logs, stats,  │──────▶│  Write to log file  │
-                            │   and patterns  │       └─────────────────────┘
-                            └────────┬────────┘
-                                     │
-                                     ▼
-                           ┌────────────────────┐
-                           │      Analyser      │       
-                           │  (outages reports  │
-                           │and latency metrics)│       
-                           └─────────┬──────────┘
-                                     │
-                                     ▼
-                            notification channel
-                                     │
-                                     ▼
-                            ┌─────────────────┐
-                            │   Notification  │
-                            │      handler    │
-                            └────────┬────────┘        ┌─────────────────────┐
-                                     ├────────────────▶│ Write to event file │
-                                     │                 └─────────────────────┘
-                                     ▼
-                   Send Notifications via specified channels
+┌────────────┐    ┌────────────────┐
+│   Config   ├───▶│ Permit handler ├──▶ permit channel 
+└──────┬─────┘    └────────────────┘          │           
+       │                                      │
+       ▼                                      │
+┌──────────────┐                              │
+│ Job Refiller ├───▶ jobs channel ───┐        │
+└──────────────┘                     │        │
+                                     ▼        ▼
+                                ┌─────────────────┐
+                                │    WorkerPool   │
+                                │   (concurrent)  │
+                                └────────┬────────┘
+                                         │
+                                         ▼
+                                  results channel
+                                         │
+                                         ▼
+                                ┌─────────────────┐            
+                                │    Aggregator   │       ┌─────────────────────┐    
+                                │   logs, stats,  │──────▶│  Write to log file  │
+                                │   and patterns  │       └─────────────────────┘
+                                └────────┬────────┘
+                                         │
+                                         ▼
+                                ┌────────────────────┐
+                                │      Analyser      │       
+                                │  (outages reports  │
+                                │and latency metrics)│       
+                                └─────────┬──────────┘
+                                          │
+                                          ▼
+                                 notification channel
+                                          │
+                                          ▼
+                                 ┌─────────────────┐
+                                 │   Notification  │
+                                 │      handler    │
+                                 └────────┬────────┘        ┌─────────────────────┐
+                                          ├────────────────▶│ Write to event file │
+                                          │                 └─────────────────────┘
+                            ┌─────────────┴─────────────┐
+                            │                           │
+                            ▼                           ▼
+                      ┌────────────┐              ┌────────────┐
+                      │  Discord   │              │    Mail    │
+                      └────────────┘              └────────────┘           
 ```
 * **Job refiller**: periodically pushes jobs into `jobs` channel.
 * **Worker pool**: N workers consume jobs, acquire permits, and process requests.
@@ -128,7 +140,7 @@ The monitor will:
 * **`Results` channel**: fan-in of scrape results, consumed by aggregator for logging and future persistence.
 * **Aggregator**: Listens to `results` channel, pulls results from N workers into one lane.
 * **Analyser**: Finds patterns in results channel and reports to the `notification` channel.
-* **Notification Handler**: Sends enriched notifications through mail.
+* **Notification Handler**: Sends enriched notifications through `mail` and/or `discord` as configured.
 
 ---
 

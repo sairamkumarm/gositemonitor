@@ -42,7 +42,7 @@ func AnalyseResult(res scrapper.ScrapeResult, finish context.Context) {
 				logger.Log.Error("Possible outage in progress", zap.Any("outage", stat))
 				//log and write to notification channel about ongoing outage
 				statcopy := *stat
-				notif := notification.Notification{Message: "Possible outage in progress", Data: statcopy, TimestampUTC: time.Now()}
+				notif := notification.Event{Message: "Possible outage in progress", Data: statcopy, TimestampUTC: time.Now()}
 				select{
 				case <-finish.Done():
 					return
@@ -57,7 +57,7 @@ func AnalyseResult(res scrapper.ScrapeResult, finish context.Context) {
 				//log and write to a notification channel about outage
 				logger.Log.Warn("Outage report", zap.Any("outage", stat))
 				statcopy := *stat
-				notif:= notification.Notification{Message: "Outage Report",Data: statcopy, TimestampUTC: time.Now()}
+				notif:= notification.Event{Message: "Outage Report",Data: statcopy, TimestampUTC: time.Now()}
 				select{
 				case <-finish.Done():
 					return

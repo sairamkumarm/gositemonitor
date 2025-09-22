@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"sync"
-	// "encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
@@ -35,19 +34,14 @@ func main() {
 	}
 
 	//create reusable logger
-	logger.New()
+	logger.New(config.ProdConfig.LogLevel)
 	defer logger.Log.Sync()
 
 	logger.Log.Info("Starting GoSiteMonitor",
-		zap.Int("urls_count", len(config.ProdConfig.URLs)),
-		zap.String("output_dir", config.ProdConfig.OutputDir),
-		zap.Int("worker_count", config.ProdConfig.WorkerCount),
-		zap.Int("rate_limit_per_sec", config.ProdConfig.RateLimitPerSec),
-		zap.Int("request_timeout", config.ProdConfig.RequestTimeOutSecs),
-		zap.Int("request_interval", config.ProdConfig.RequestInterval))
+		zap.Any("config",config.ProdConfig))
 
-	// b, _ := json.MarshalIndent(config, "", " ")
-	// Log.Info("loaded config", zap.String("config", string(b)))
+	// b, _ := json.MarshalIndent(config.ProdConfig, "", " ")
+	// logger.Log.Info("loaded config", zap.String("config", string(b)))
 
 	//create resuable context for total graceful shutdown
 	var finish context.Context
@@ -123,7 +117,7 @@ func main() {
 
 	//initiate the event handler
 	wg.Add(1)//wait for event handler
-	go notification.EventHandler(config.ProdConfig.OutputDir,finish, cancel, &wg)
+	go notification.EventHandler(config.ProdConfig.OutputDir,config.ProdConfig.NotificationServices, finish, cancel, &wg)
 
 
 	<-finish.Done()
