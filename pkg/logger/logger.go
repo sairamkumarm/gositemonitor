@@ -3,6 +3,7 @@ package logger
 import (
 	"strings"
 
+	"github.com/sairamkumarm/gositemonitor/pkg/config"
 	"github.com/sairamkumarm/gositemonitor/pkg/scrapper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -10,12 +11,12 @@ import (
 
 var Log *zap.Logger
 
-func New(level string) {
+func New() {
 
 	cfg := zap.NewProductionConfig()
 	cfg.Encoding = "json"
 	cfg.EncoderConfig.EncodeTime = zapcore.RFC3339TimeEncoder //uses time format 2025-09-21T18:32:00Z
-	switch strings.ToLower(level) {
+	switch strings.ToLower(config.ProdConfig.LogLevel) {
 	case "info":
 		cfg.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
 	case "debug":

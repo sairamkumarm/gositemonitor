@@ -27,24 +27,24 @@ func main() {
 	runtimeTimout := flag.Int("runtime", -100, "Monitor runtime in seconds")
 	flag.Parse()
 
-	// config, err := config.Load()
-	config, err := config.Load(*configPath)
+	// loads values into a global config struct
+	err := config.Load(*configPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Config error: %v\n", err)
 		os.Exit(1)
 	}
 
 	//create reusable logger
-	logger.New(config.LogLevel)
+	logger.New()
 	defer logger.Log.Sync()
 
 	logger.Log.Info("Starting GoSiteMonitor",
-		zap.Int("urls_count", len(config.URLs)),
-		zap.String("output_dir", config.OutputDir),
-		zap.Int("worker_count", config.WorkerCount),
-		zap.Int("rate_limit_per_sec", config.RateLimitPerSec),
-		zap.Int("request_timeout", config.RequestTimeOutSecs),
-		zap.Int("request_interval", config.RequestInterval))
+		zap.Int("urls_count", len(config.ProdConfig.URLs)),
+		zap.String("output_dir", config.ProdConfig.OutputDir),
+		zap.Int("worker_count", config.ProdConfig.WorkerCount),
+		zap.Int("rate_limit_per_sec", config.ProdConfig.RateLimitPerSec),
+		zap.Int("request_timeout", config.ProdConfig.RequestTimeOutSecs),
+		zap.Int("request_interval", config.ProdConfig.RequestInterval))
 
 	// b, _ := json.MarshalIndent(config, "", " ")
 	// Log.Info("loaded config", zap.String("config", string(b)))
@@ -74,31 +74,31 @@ func main() {
 	wg := sync.WaitGroup{}
 
 	//create output dir, if present use that
-	err = os.MkdirAll(config.OutputDir, 0755)
+	err = os.MkdirAll(config.ProdConfig.OutputDir, 0755)
 	if err != nil {
 		logger.Log.Error("Error making output dir: ", zap.Error(err))
 	} else {
-		logger.Log.Info("Ping results stored in " + config.OutputDir)
+		logger.Log.Info("Ping results stored in " + config.ProdConfig.OutputDir)
 	}
 
 	//Initialize stats map
-	analyser.FillInitialUrls(config.URLs)
+	analyser.FillInitialUrls(config.ProdConfig.URLs)
 
 	fmt.Println("Ready to commence operations.")
 
-	jobs := make(chan string, len(config.URLs))
+	jobs := make(chan string, len(config.ProdConfig.URLs))
 	results := make(chan scrapper.ScrapeResult,100)
-	permits := make(chan struct{}, config.RateLimitPerSec)
+	permits := make(chan struct{}, config.ProdConfig.RateLimitPerSec)
 
 	//create permit channel that releases the ratelimit amount of tokens every second, so the workers can pick them up and work
 	wg.Add(1)//wait for permit handler
-	go scheduler.PermitHandler(permits, config.RateLimitPerSec, finish, &wg)
+	go scheduler.PermitHandler(permits, config.ProdConfig.RateLimitPerSec, finish, &wg)
 
 	//job refiller to fill jobs channel periodically with urls to ping
 	wg.Add(1)//wait for job refiller
-	go scheduler.JobHandler(jobs, config.URLs, config.RateLimitPerSec, config.RequestIntervalDuration(), finish, &wg)
+	go scheduler.JobHandler(jobs, config.ProdConfig.URLs, config.ProdConfig.RateLimitPerSec, config.ProdConfig.GetRequestIntervalDuration(), finish, &wg)
 
-	timeout := time.Duration(config.RequestTimeOutSecs) * time.Second
+	timeout := time.Duration(config.ProdConfig.RequestTimeOutSecs) * time.Second
 	//resuse a shared httpclient in all the workers, common transport settings are configured here
 	client := &http.Client{
 		Transport: &http.Transport{
@@ -111,7 +111,7 @@ func main() {
 		},
 	}
 	//spawn workers, they wait internally for jobs and permits from their channels
-	for i := 0; i < config.WorkerCount; i++ {
+	for i := 0; i < config.ProdConfig.WorkerCount; i++ {
 		wg.Add(1)//wait for worker
 		go scrapper.Worker(i, jobs, results, permits, timeout, client, finish, &wg)
 
@@ -119,11 +119,11 @@ func main() {
 
 	//read results channel and log outputs
 	wg.Add(1)//wait for aggregator
-	go aggregator.Aggregate(results, config.OutputDir, finish, cancel, &wg)
+	go aggregator.Aggregate(results, config.ProdConfig.OutputDir, finish, cancel, &wg)
 
 	//initiate the event handler
 	wg.Add(1)//wait for event handler
-	go notification.EventHandler(config.OutputDir,finish, cancel, &wg)
+	go notification.EventHandler(config.ProdConfig.OutputDir,finish, cancel, &wg)
 
 
 	<-finish.Done()

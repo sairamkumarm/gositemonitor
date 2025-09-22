@@ -18,9 +18,9 @@ type Config struct {
 	OutputDir          string   `json:"output_dir"`
 	RequestInterval    int      `json:"request_interval"`
 }
+var ProdConfig Config = Config{}
 
-func Load(path string) (*Config, error) {
-
+func Load(path string) (error) {
 	const (
 		minWorkers      = 1
 		defaultWorkers  = 5
@@ -32,24 +32,23 @@ func Load(path string) (*Config, error) {
 		minRatePerSec   = 1
 		maxRatePerSec   = 10
 	)
-
+	
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("cannot read config: %w", err)
+		return fmt.Errorf("cannot read config: %w", err)
 	}
-	var cfg Config
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("malformed config: %w", err)
+	if err := json.Unmarshal(data, &ProdConfig); err != nil {
+		return fmt.Errorf("malformed config: %w", err)
 	}
 
-	if len(cfg.URLs) == 0 {
-		return nil, fmt.Errorf("no URLs provided in config")
+	if len(ProdConfig.URLs) == 0 {
+		return fmt.Errorf("no URLs provided in config")
 	}
 
 	urlmap := make(map[string]struct{}) //handling duplicate urls
-	cleanedURLs := make([]string, 0, len(cfg.URLs))
+	cleanedURLs := make([]string, 0, len(ProdConfig.URLs))
 
-	for i, u := range cfg.URLs {
+	for i, u := range ProdConfig.URLs {
 		u = strings.TrimSpace(u)
 		if u == "" {
 			fmt.Printf("Skipping empty URL at index %d\n", i)
@@ -57,10 +56,10 @@ func Load(path string) (*Config, error) {
 		}
 		parsed, err := url.Parse(u)
 		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-			return nil, fmt.Errorf("invalid URL at index %d: %q", i, u)
+			return fmt.Errorf("invalid URL at index %d: %q", i, u)
 		}
 		if parsed.Scheme != "http" && parsed.Scheme != "https" {
-			return nil, fmt.Errorf("unsupported URL scheme at index %d: %q", i, u)
+			return fmt.Errorf("unsupported URL scheme at index %d: %q", i, u)
 		}
 		_, duplicate := urlmap[parsed.String()] //duplicate handling
 		if duplicate {
@@ -71,66 +70,66 @@ func Load(path string) (*Config, error) {
 		}
 	}
 	if len(cleanedURLs) == 0 {
-		return nil, fmt.Errorf("no Valid URLs to monitor")
+		return fmt.Errorf("no Valid URLs to monitor")
 	}
-	cfg.URLs = cleanedURLs
+	ProdConfig.URLs = cleanedURLs
 
 	// Worker count
-	if cfg.WorkerCount < minWorkers {
-		fmt.Printf("WorkerCount too low (%d), defaulting to %d\n", cfg.WorkerCount, defaultWorkers)
-		cfg.WorkerCount = defaultWorkers
+	if ProdConfig.WorkerCount < minWorkers {
+		fmt.Printf("WorkerCount too low (%d), defaulting to %d\n", ProdConfig.WorkerCount, defaultWorkers)
+		ProdConfig.WorkerCount = defaultWorkers
 	}
-	if cfg.WorkerCount > maxWorkers {
-		fmt.Printf("WorkerCount too high (%d), capping to %d\n", cfg.WorkerCount, maxWorkers)
-		cfg.WorkerCount = maxWorkers
+	if ProdConfig.WorkerCount > maxWorkers {
+		fmt.Printf("WorkerCount too high (%d), capping to %d\n", ProdConfig.WorkerCount, maxWorkers)
+		ProdConfig.WorkerCount = maxWorkers
 	}
 
 	// Rate limit per second (global)
-	if cfg.RateLimitPerSec < minRatePerSec {
-		fmt.Printf("RateLimitPerSec too low (%d), defaulting to %d\n", cfg.RateLimitPerSec, minRatePerSec)
-		cfg.RateLimitPerSec = minRatePerSec
+	if ProdConfig.RateLimitPerSec < minRatePerSec {
+		fmt.Printf("RateLimitPerSec too low (%d), defaulting to %d\n", ProdConfig.RateLimitPerSec, minRatePerSec)
+		ProdConfig.RateLimitPerSec = minRatePerSec
 	}
-	if cfg.RateLimitPerSec > maxRatePerSec {
-		fmt.Printf("RateLimitPerSec too high (%d), capping to %d to avoid accidental DOS\n", cfg.RateLimitPerSec, maxRatePerSec)
-		cfg.RateLimitPerSec = maxRatePerSec
+	if ProdConfig.RateLimitPerSec > maxRatePerSec {
+		fmt.Printf("RateLimitPerSec too high (%d), capping to %d to avoid accidental DOS\n", ProdConfig.RateLimitPerSec, maxRatePerSec)
+		ProdConfig.RateLimitPerSec = maxRatePerSec
 	}
 
 	// Request timeout
-	if cfg.RequestTimeOutSecs < minTimeoutSecs {
-		fmt.Printf("RequestTimeOutSecs too small (%d), defaulting to %d seconds\n", cfg.RequestTimeOutSecs, defaultTimeout)
-		cfg.RequestTimeOutSecs = defaultTimeout
+	if ProdConfig.RequestTimeOutSecs < minTimeoutSecs {
+		fmt.Printf("RequestTimeOutSecs too small (%d), defaulting to %d seconds\n", ProdConfig.RequestTimeOutSecs, defaultTimeout)
+		ProdConfig.RequestTimeOutSecs = defaultTimeout
 	}
 
 	// Request interval between bursts
-	if cfg.RequestInterval < minIntervalSecs {
-		fmt.Printf("RequestInterval out too short (%d), defaulting to %d seconds\n", cfg.RequestInterval, defaultInterval)
-		cfg.RequestInterval = defaultInterval
+	if ProdConfig.RequestInterval < minIntervalSecs {
+		fmt.Printf("RequestInterval out too short (%d), defaulting to %d seconds\n", ProdConfig.RequestInterval, defaultInterval)
+		ProdConfig.RequestInterval = defaultInterval
 	}
 
 	// Safety: avoid accidental overlaps by default
-	if cfg.RequestInterval <= cfg.RequestTimeOutSecs {
+	if ProdConfig.RequestInterval <= ProdConfig.RequestTimeOutSecs {
 		// Add one second buffer so most requests from previous burst can finish
-		newInterval := cfg.RequestTimeOutSecs + 1
+		newInterval := ProdConfig.RequestTimeOutSecs + 1
 		fmt.Printf("RequestInterval (%d) <= RequestTimeOutSecs (%d), bumping RequestInterval to %d to avoid burst overlap\n",
-			cfg.RequestInterval, cfg.RequestTimeOutSecs, newInterval)
+			ProdConfig.RequestInterval, ProdConfig.RequestTimeOutSecs, newInterval)
 		// Only increase, never decrease here
-		cfg.RequestInterval = newInterval
+		ProdConfig.RequestInterval = newInterval
 	}
 
-	if strings.TrimSpace(cfg.OutputDir) == "" {
-		cfg.OutputDir = "gsm_logs"
+	if strings.TrimSpace(ProdConfig.OutputDir) == "" {
+		ProdConfig.OutputDir = "gsm_logs"
 		fmt.Println("Output Directory not specified, defaulting to gsm_logs")
 	}
 
-	switch strings.ToLower(cfg.LogLevel) {
+	switch strings.ToLower(ProdConfig.LogLevel) {
 	case "debug", "warn", "error", "info", "":
 	default:
-		cfg.LogLevel = "info"
+		ProdConfig.LogLevel = "info"
 		fmt.Println("Unrecognized log level, defaulting to info")
 	}
 
-	return &cfg, nil
+	return nil
 }
-func (c *Config) RequestIntervalDuration() time.Duration {
+func (c *Config) GetRequestIntervalDuration() time.Duration {
 	return time.Duration(c.RequestInterval) * time.Second
 }
