@@ -121,9 +121,9 @@ func main() {
 	wg.Add(1)//wait for aggregator
 	go aggregator.Aggregate(results, config.OutputDir, finish, cancel, &wg)
 
-	//initiate the notification handler
-	wg.Add(1)//wait for notification handler
-	go notification.NotificationHandler(config.OutputDir,finish, cancel, &wg)
+	//initiate the event handler
+	wg.Add(1)//wait for event handler
+	go notification.EventHandler(config.OutputDir,finish, cancel, &wg)
 
 
 	<-finish.Done()

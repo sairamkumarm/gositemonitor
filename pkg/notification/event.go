@@ -21,9 +21,9 @@ type Notification struct {
 	TimestampUTC time.Time
 }
 
-var NotificationChannel = make(chan Notification, 100)
+var EventChannel = make(chan Notification, 100)
 
-func NotificationHandler(outputDir string, finish context.Context, cancel context.CancelFunc, wg *sync.WaitGroup){
+func EventHandler(outputDir string, finish context.Context, cancel context.CancelFunc, wg *sync.WaitGroup){
 	defer wg.Done()
 	filename := fmt.Sprintf("gsm-%s-events.json", time.Now().Format("20060102_150405"))
 	file, err := os.OpenFile(path.Join(outputDir,filename), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
@@ -37,7 +37,7 @@ func NotificationHandler(outputDir string, finish context.Context, cancel contex
 		case <-finish.Done():
 			fmt.Println("Deactivating Notification Handler")
 			return;
-		case notif:= <- NotificationChannel:
+		case notif:= <- EventChannel:
 			logger.Log.Info("Notification",zap.Any("value",notif))//do something with the notification
 			bytes, err := json.Marshal(notif)
 			if err != nil {

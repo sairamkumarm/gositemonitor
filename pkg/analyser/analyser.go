@@ -46,7 +46,7 @@ func AnalyseResult(res scrapper.ScrapeResult, finish context.Context) {
 				select{
 				case <-finish.Done():
 					return
-				case notification.NotificationChannel <- notif:
+				case notification.EventChannel <- notif:
 					//safe enqueue
 				}
 			}
@@ -61,7 +61,7 @@ func AnalyseResult(res scrapper.ScrapeResult, finish context.Context) {
 				select{
 				case <-finish.Done():
 					return
-				case notification.NotificationChannel <- notif:
+				case notification.EventChannel <- notif:
 					//safe enqueue
 				}
 				//reseting values except total
