@@ -85,64 +85,21 @@ The monitor will:
 ---
 
 ## Architecture
-```
-┌────────────┐    ┌────────────────┐
-│   Config   ├───▶│ Permit handler ├──▶ permit channel 
-└──────┬─────┘    └────────────────┘          │           
-       │                                      │
-       ▼                                      │
-┌──────────────┐                              │
-│ Job Refiller ├───▶ jobs channel ───┐        │
-└──────────────┘                     │        │
-                                     ▼        ▼
-                                ┌─────────────────┐
-                                │    WorkerPool   │
-                                │   (concurrent)  │
-                                └────────┬────────┘
-                                         │
-                                         ▼
-                                  results channel
-                                         │
-                                         ▼
-                                ┌─────────────────┐            
-                                │    Aggregator   │       ┌─────────────────────┐    
-                                │   logs, stats,  │──────▶│  Write to log file  │
-                                │   and patterns  │       └─────────────────────┘
-                                └────────┬────────┘
-                                         │
-                                         ▼
-                                ┌────────────────────┐
-                                │      Analyser      │       
-                                │  (outages reports  │
-                                │and latency metrics)│       
-                                └─────────┬──────────┘
-                                          │
-                                          ▼
-                                 notification channel
-                                          │
-                                          ▼
-                                 ┌─────────────────┐
-                                 │   Notification  │
-                                 │      handler    │
-                                 └────────┬────────┘        ┌─────────────────────┐
-                                          ├────────────────▶│ Write to event file │
-                                          │                 └─────────────────────┘
-                            ┌─────────────┴─────────────┐
-                            │                           │
-                            ▼                           ▼
-                      ┌────────────┐              ┌────────────┐
-                      │  Discord   │              │    Mail    │
-                      └────────────┘              └────────────┘           
-```
-* **Job refiller**: periodically pushes jobs into `jobs` channel.
-* **Worker pool**: N workers consume jobs, acquire permits, and process requests.
-* **`Permits` channel**: global rate limiter controlling request throughput.
-* **`Results` channel**: fan-in of ping results, consumed by aggregator for logging and future persistence.
+<img width="1000" height="1551" alt="image" src="https://github.com/user-attachments/assets/0c47e54c-6921-4776-872c-b4ba901b6a90" />
+
+
+### Sections
+* **Job refiller**: Periodically pushes jobs into `jobs` channel.
+* **Worker pool**: `N workers` consume jobs, acquire permits, and process requests.
+* **`Permits` channel**: Global rate limiter controlling request throughput.
+* **`Results` channel**: Fan-in of ping results, consumed by aggregator for logging and future persistence.
 * **Aggregator**: Listens to `results` channel, pulls results from N workers into one lane.
+* **`Notification` channel**: Carrys patterns and stats to be packaged and forwarded.
 * **Analyser**: Finds patterns in results channel and reports to the `notification` channel.
 * **Notification Handler**: Sends enriched notifications through `mail` and/or `discord` as configured.
 
 ---
+
 
 ## Code Structure
 
