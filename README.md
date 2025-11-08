@@ -122,3 +122,13 @@ gositemonitor/
 ```
 
 ---
+
+### Commands
+
+```ps
+docker build -t gositemonitor:latest .
+docker run --rm -p 8080:8080 \
+  -v ${PWD}/config.json:/project/config.json \
+  -v ${PWD}/gsm_logs:/project/gsm_logs \
+  gositemonitor:latest
+```
